@@ -1,0 +1,220 @@
+---
+title: "Bellabeat_Case_Study"
+author: "Ian Lim"
+date: "7/2/2021"
+output: html_document
+---
+
+# Introduction & Goals
+This case study is part of the Google Data Analytics Certification Capstone project.For this case study, we are tasked with providing insights regarding how consumers are using their smart devices by analyzing competitor's data (FitBit) to improve Bellabeat's marketing strategy.
+
+Main Questions to Answer & Goals from this Analysis:
+
+* How are customers of FitBit mainly using their fitness trackers?
+* What features are most commonly used or in demand?
+* How does this compare to what Bellabeat's product has to offer?
+* Suggestion to Bellabeats on their product.
+
+## Dataset
+The dataset for this analysis can be found from https://www.kaggle.com/arashnic/fitbit
+
+## Installing Packages
+For this analysis, we will be using R packages such as tidyverse, ggplot2, and sqldf.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(sqldf)
+```
+
+## Reading CSV files and Creating Dataframes
+```{r}
+setwd("C:/Users/Ian Lim/Documents/R/FitBit-Data")
+daily_activity <- read.csv("dailyActivity_merged.csv")
+daily_calories <- read.csv("dailyCalories_merged.csv")
+sleep_day <- read.csv("sleepDay_merged.csv")
+daily_intensities <- read.csv("dailyIntensities_merged.csv")
+weight_log <- read.csv("weightLogInfo_merged.csv")
+```
+
+## Exploring each Data Frame
+### Daily Activity
+```{r}
+head(daily_activity)
+colnames(daily_activity)
+glimpse(daily_activity)
+```
+### Daily Calories
+```{r}
+head(daily_calories)
+colnames(daily_calories)
+glimpse(daily_calories)
+```
+### Sleep Day
+```{r}
+head(sleep_day)
+colnames(sleep_day)
+glimpse(sleep_day)
+```
+### Daily Intensities
+```{r}
+head(daily_intensities)
+colnames(daily_intensities)
+glimpse(daily_intensities)
+```
+### Weight Log
+```{r}
+head(weight_log)
+colnames(weight_log)
+glimpse(weight_log)
+```
+## Quick Analysis
+All 5 data frames have a common 'ID' field which can be used to merge/join the data frames.
+We can see that daily_activity, daily_calories, and daily_intensities have the same number of rows/observations.
+By closer observations, we can also see that the details in daily_calories and daily_intensities seems to already exist in daily_activity. To confirm this, we need to check if the values match for the respective IDs.
+
+Let's use SQL syntax to check. To do this, we need to create a temporary data frame as it would not work if the number of columns in two data frames are different.
+
+### Checking for daily_calories
+daily_calories has 3 columns, so we need to create a temporary data frame with 3 columns.
+```{r}
+daily_activity2 <- daily_activity %>%
+  select(Id, ActivityDate, Calories)
+
+head(daily_activity2)
+```
+
+Seems good, now let's see the intersect of daily_activity2 with daily_calories and check the number of rows of the intersect.
+```{r}
+sql_check1 <- sqldf('SELECT * FROM daily_activity2 INTERSECT SELECT * FROM daily_calories')
+
+head(sql_check1)
+nrow(sql_check1)
+```
+
+### Checking for daily_intensities
+daily_intensities has 10 columns, so we need to create a temporary data frame with 10 columns.
+```{r}
+daily_activity3 <- daily_activity %>%
+  select(Id, ActivityDate, SedentaryMinutes, LightlyActiveMinutes, FairlyActiveMinutes, VeryActiveMinutes, SedentaryActiveDistance, LightActiveDistance, ModeratelyActiveDistance, VeryActiveDistance)
+
+head(daily_activity3)
+```
+Seems good, now let's repeat the same intersect check as per above.
+```{r}
+sql_check2 <- sqldf('SELECT * FROM daily_activity3 INTERSECT SELECT * FROM daily_intensities')
+
+head(sql_check2)
+nrow(sql_check2)
+```
+As we can see, both checks result in the number of rows still being 940. In this case, we can say that the values are the same for all 3 data frames. This also means that we can exclude both the daily_calories and daily_intensities table from our analysis as the information they contain can be found in daily_activity.
+
+## Further Analysis
+Continuing from above, we are now left with 3 data frames:
+
+* daily_activity
+* sleep_day
+* weight_log
+
+Let's find out how many distinct IDs are there in all 3.
+
+```{r}
+n_distinct(daily_activity$Id)
+n_distinct(sleep_day$Id)
+n_distinct(weight_log$Id)
+```
+
+Let's look at the summary for all 3 as well.
+
+### Daily Activity
+```{r}
+daily_activity %>%  
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes,
+         VeryActiveMinutes) %>%
+  summary()
+```
+
+### Sleep Day
+```{r}
+sleep_day %>%  
+  select(TotalSleepRecords,
+  TotalMinutesAsleep,
+  TotalTimeInBed) %>%
+  summary()
+```
+
+### Weight Log
+```{r}
+weight_log %>%  
+  select(WeightKg,
+  BMI) %>%
+  summary()
+```
+
+## Merging the data frame together
+Let's first combine sleep_day and daily_activity. I choose to include all values as indicated by using "all=TRUE". To check for this, we use n_distinct to make sure the value will be 33.
+```{r}
+combined_data <- merge(sleep_day, daily_activity, by='Id', all=TRUE)
+n_distinct(combined_data$Id)
+```
+Then, we add weight_log to the newly combined data frame, repeating the steps above.
+```{r}
+combined_data_all <- merge(combined_data, weight_log, by='Id', all=TRUE)
+n_distinct(combined_data_all$Id)
+head(combined_data_all)
+```
+Looks good, let's begin plotting some graphs.
+
+## Plotting some Graphs
+### Relationship between Total Steps and Calories
+```{r}
+ggplot(data = daily_activity, aes(x = TotalSteps, y = Calories))+ geom_point() + geom_smooth()
+```
+
+We can see a rather clear indication from the graph above that people who took more steps tends to burn more calories. Nothing out of the expectation here.
+
+### Relationship between Total Steps and Sedentary Minutes 
+```{r}
+ggplot(data = daily_activity, aes(x = TotalSteps, y = SedentaryMinutes, color = Calories)) + geom_point()
+```
+
+There is a negative relationship between the total number of steps and sedentary minutes which makes sense. We can also see that as the number of steps increase the total number of calories burned also trend upwards.
+
+### Relationship between Minutes Asleep and Time in Bed
+```{r}
+ggplot(data = sleep_day, aes(x = TotalMinutesAsleep, y = TotalTimeInBed))+ geom_point() + geom_smooth()
+```
+
+It is almost a linear relationship between the total minutes asleep and the total time in bed. There are a few exception but I would assume that some people do other activities in bed other than sleeping such as using their mobile phone and watching movies.
+
+### Average Minutes of Activity by Intensity
+```{r}
+mean_activity_min <- c(991,192,13,21)
+activity_intensity <- c("Sedentary","Lightly","Fairly", "Very Active")
+minute_intensity <- data.frame(mean_activity_min, activity_intensity)
+
+ggplot(data = minute_intensity, aes(x = activity_intensity, y = mean_activity_min)) + labs(x = 'Activity Intensity', y = 'Average Activity Minutes') + geom_col()
+```
+
+From the graph above, we can see that the intensity that records the highest average minutes for FitBit users are Sedentary minutes which should not be very surprising as it is very reasonable to expect the majority of the public to be somehwere in the middle of both extremes.
+
+## Key Takeaways
+1. We need to collect more data to get a more accurate representation of the smart devices market.It is even better if we can obtain data from more than just one competitor to get a better estimation of the market.
+
+2. We notice that FitBit users consider certain matrix more important as indicated by the different number of distinct users logging their information. In the analysis, we find FitBit users take the time to input calories, step taken, and intensity of activity but fail or refuse to track their sleep and weight, possibly because it is optional. We can try to simplify the method of inputing the information for these matrix or improve the design UI/UX which could possibly increase the users' tendency to log these information.
+
+3. We also notice that FitBit does not track water intake which Bellabeat offer. This could be a marketing focus/strategy for Bellabeat as we offer a more comprehensive tracking for our overall fitness.
+
+4. There is no indication from the data that FitBit offers any recommendation or advice to their users to improve their current fitness based on what they have inputted. Bellabeat could try to provide their users with weekly summary and updates on their users' fitness level and provide some suggestions on how they can further improve their health. Allowing users to set a fitness goal and include a progression which the users can track should be considered. This could be an area that Bellabeat can explore and possibly utilize to gain a bigger market share.
+
+
+## TL;DR Recommendations for Bellabeat
+1. More data is needed for a more accurate analysis.
+
+2. Consider improving the design UI/UX or simplify the data input process to encourage users to input the information.
+
+3. Bellabeat tracks more information than FitBit making it a more complete fitness tracker.
+
+4. Consider providing users with weekly/monthly updates on their fitness and activity level along with some suggestions to further improve their current condition. Goals setting and tracking is a possible option.
